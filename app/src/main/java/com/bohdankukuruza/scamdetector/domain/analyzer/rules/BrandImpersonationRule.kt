@@ -6,17 +6,26 @@ import com.bohdankukuruza.scamdetector.data.model.DetectionSignal
  * Detects messages that name a well-known brand but link to a domain
  * unrelated to that brand — a classic phishing pattern (e.g. an
  * "Amazon" delivery notification pointing to amzn-track.xyz).
+ *
+ * ### Host matching
+ * Earlier versions of this rule used `String.contains` to compare URLs
+ * against legitimate domains, which incorrectly classified
+ * `amazon.com.evil-phish.tk` as legitimate because the URL "contains"
+ * `amazon.com`. The current implementation extracts the host of each
+ * URL and matches against legitimate domains using suffix comparison
+ * with a leading-dot guard (`host == legit || host.endsWith(".$legit")`),
+ * which is the standard approach when not pulling in a full public
+ * suffix list.
+ *
+ * ### Brand mention matching
+ * Brand keys are matched with word-boundary regexes rather than
+ * substring contains — otherwise short keys like `ups` would fire on
+ * `groups` and `aib` on `caribbean`.
  */
 class BrandImpersonationRule : DetectionRule {
 
     override val name: String = "brand_impersonation"
 
-    /**
-     * Map of brand name (as it appears in scam text) to the set of
-     * legitimate domains that brand actually uses. If the message
-     * mentions the brand but no link matches its legitimate domains,
-     * we flag it.
-     */
     private val brandDomains: Map<String, Set<String>> = mapOf(
         "amazon" to setOf("amazon.com", "amazon.co.uk", "amazon.ie", "amzn.to"),
         "paypal" to setOf("paypal.com", "paypal.me"),
@@ -43,13 +52,14 @@ class BrandImpersonationRule : DetectionRule {
 
         val normalized = text.lowercase()
         val urls = urlRegex.findAll(normalized).map { it.value }.toList()
-
         if (urls.isEmpty()) return null
 
+        val hosts = urls.map(::extractHost)
+
         val impersonated = brandDomains.entries.firstOrNull { (brand, legitimateDomains) ->
-            val brandMentioned = normalized.contains(brand)
-            val linksToLegit = urls.any { url ->
-                legitimateDomains.any { legit -> url.contains(legit) }
+            val brandMentioned = mentionsBrand(normalized, brand)
+            val linksToLegit = hosts.any { host ->
+                legitimateDomains.any { legit -> hostMatches(host, legit) }
             }
             brandMentioned && !linksToLegit
         } ?: return null
@@ -63,5 +73,32 @@ class BrandImpersonationRule : DetectionRule {
             weight = 8,
             explanation = "Message mentions $brandDisplay but links to an unrelated domain ($suspiciousUrl)."
         )
+    }
+
+    /**
+     * Extracts the host portion of a URL: strips scheme, `www.` prefix,
+     * and any path. Lowercased input expected.
+     */
+    private fun extractHost(url: String): String =
+        url.substringAfter("://", missingDelimiterValue = url)
+            .removePrefix("www.")
+            .substringBefore('/')
+
+    /**
+     * Suffix match with leading-dot guard so `amazon.com` does not
+     * match `amazon.com.evil-phish.tk` and `apple.com` does not match
+     * `notapple.com`.
+     */
+    private fun hostMatches(host: String, legitimate: String): Boolean =
+        host == legitimate || host.endsWith(".$legitimate")
+
+    /**
+     * Word-boundary match for brand names. Brand keys may contain
+     * spaces (e.g. "an post"), so we anchor on `\b` rather than
+     * splitting on whitespace.
+     */
+    private fun mentionsBrand(text: String, brand: String): Boolean {
+        val escaped = Regex.escape(brand)
+        return Regex("\\b$escaped\\b").containsMatchIn(text)
     }
 }
