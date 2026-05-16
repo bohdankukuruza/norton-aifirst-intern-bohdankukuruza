@@ -85,13 +85,13 @@ class SuspiciousDomainRule : DetectionRule {
         )
     }
 
-    private fun hasSuspiciousTld(url: String): Boolean =
-        suspiciousTlds.any { tld -> url.contains(tld) }
-
-    /**
-     * Treats a URL as having "excessive" hyphens if its host part
-     * contains 3 or more. Legitimate brand domains almost never do this.
-     */
+    private fun hasSuspiciousTld(url: String): Boolean {
+        val host = url
+            .substringAfter("://", missingDelimiterValue = url)
+            .removePrefix("www.")
+            .substringBefore('/')
+        return suspiciousTlds.any { tld -> host.endsWith(tld) }
+    }
     private fun hasExcessiveHyphens(url: String): Boolean {
         val host = url
             .substringAfter("://", missingDelimiterValue = url)
