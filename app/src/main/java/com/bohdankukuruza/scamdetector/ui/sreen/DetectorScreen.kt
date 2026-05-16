@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -36,15 +39,6 @@ import com.bohdankukuruza.scamdetector.ui.viewmodel.DetectorViewModel
 
 /**
  * Main scam detector screen.
- *
- * Composed of:
- *  - A top app bar with the app title.
- *  - An input field where the user types or pastes a suspicious message.
- *  - A row of sample chips for one-tap example messages.
- *  - An Analyze button (disabled while input is empty or analysis is in
- *    flight).
- *  - A result area that shows a spinner while analysing and a
- *    [ResultCard] when complete.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,9 +79,10 @@ fun DetectorScreen(
                 onValueChange = viewModel::onInputChanged,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp),
+                    .heightIn(min = 120.dp, max = 240.dp),
                 placeholder = { Text("Paste message here...") },
-                maxLines = 8
+                maxLines = 8,
+                enabled = !state.isAnalyzing
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -104,10 +99,14 @@ fun DetectorScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
-                items(SampleMessages.all) { sample ->
+                items(
+                    items = SampleMessages.all,
+                    key = { it.label }
+                ) { sample ->
                     AssistChip(
                         onClick = { viewModel.onSampleSelected(sample.text) },
-                        label = { Text(sample.label) }
+                        label = { Text(sample.label) },
+                        enabled = !state.isAnalyzing
                     )
                 }
             }
@@ -138,8 +137,24 @@ fun DetectorScreen(
                         Text("Scanning for scam indicators...")
                     }
                 }
-                state.result != null -> {
-                    ResultCard(result = state.result!!)
+                state.error != null -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = state.error ?: "",
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+                else -> {
+                    state.result?.let { result ->
+                        ResultCard(result = result)
+                    }
                 }
             }
         }
