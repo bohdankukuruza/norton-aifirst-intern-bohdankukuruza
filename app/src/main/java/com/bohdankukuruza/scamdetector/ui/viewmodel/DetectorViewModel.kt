@@ -18,6 +18,12 @@ import kotlinx.coroutines.launch
  * inside the ViewModel) so tests can substitute a fake — keeping the
  * ViewModel's tests focused on state transitions rather than rule
  * behaviour.
+ *
+ * Errors from the analyzer are caught and surfaced via
+ * [DetectorUiState.error] rather than crashing the screen or leaving
+ * `isAnalyzing` stuck at true. The current heuristic implementation
+ * does not throw, but the [ScamAnalyzer] interface allows future
+ * network-backed analyzers that can.
  */
 class DetectorViewModel(
     private val analyzer: ScamAnalyzer = HeuristicAnalyzer()
@@ -29,19 +35,15 @@ class DetectorViewModel(
     /** Called whenever the user edits the input field. */
     fun onInputChanged(newText: String) {
         _uiState.update { current ->
-            current.copy(
-                inputText = newText,
-                // Clear stale result as soon as the input changes so the
-                // user is never looking at a verdict that no longer
-                // matches what's in the field.
-                result = if (newText != current.inputText) null else current.result
-            )
+            // Any input change invalidates the previous result and clears
+            // any error from a prior failed analysis.
+            current.copy(inputText = newText, result = null, error = null)
         }
     }
 
     /** Called when the user taps a sample chip to auto-fill the input. */
     fun onSampleSelected(text: String) {
-        _uiState.update { it.copy(inputText = text, result = null) }
+        _uiState.update { it.copy(inputText = text, result = null, error = null) }
     }
 
     /** Called when the user taps the Analyze button. */
@@ -49,18 +51,28 @@ class DetectorViewModel(
         val current = _uiState.value
         if (!current.canAnalyze) return
 
-        _uiState.update { it.copy(isAnalyzing = true, result = null) }
+        _uiState.update { it.copy(isAnalyzing = true, result = null, error = null) }
 
         viewModelScope.launch {
-            val analysis = analyzer.analyze(current.inputText)
-            _uiState.update {
-                it.copy(isAnalyzing = false, result = analysis)
+            try {
+                val analysis = analyzer.analyze(current.inputText)
+                _uiState.update {
+                    it.copy(isAnalyzing = false, result = analysis, error = null)
+                }
+            } catch (t: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        isAnalyzing = false,
+                        result = null,
+                        error = "Couldn't analyze the message: ${t.message ?: "unknown error"}"
+                    )
+                }
             }
         }
     }
 
     /** Resets the screen to its initial state. */
     fun onReset() {
-        _uiState.value = DetectorUiState()
+        _uiState.update { DetectorUiState() }
     }
 }
