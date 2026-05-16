@@ -217,8 +217,11 @@ setup — the analyzer is fully local.
 
 ## Screenshots
 
-[Three screenshots go here: empty state, DANGEROUS result with several
-signals, SAFE result for a legitimate message.]
+## Screenshots
+
+| Empty state | Scam detected | Legitimate message |
+|---|---|---|
+| ![Empty state](screenshots/01-empty-state.png) | ![Dangerous result](screenshots/02-dangerous-result.png) | ![Safe result](screenshots/03-safe-result.png) |
 
 ---
 
