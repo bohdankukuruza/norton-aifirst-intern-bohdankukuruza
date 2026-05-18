@@ -227,7 +227,7 @@ setup — the analyzer is fully local.
 
 ## Demo video
 
-[5-minute walkthrough — link to be added before submission.]
+**Video:** https://youtu.be/FylQ5aP4sqk
 
 The video covers:
 

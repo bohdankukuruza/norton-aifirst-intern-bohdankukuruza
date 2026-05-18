@@ -54,9 +54,13 @@ class HeuristicAnalyzer(
             rule.evaluate(text)
         }
 
+
+
+
         val totalWeight = signals.sumOf { it.weight }
         val riskLevel = riskLevelFor(totalWeight)
         val confidence = confidenceFor(totalWeight, riskLevel)
+        println("DEBUG: totalWeight=$totalWeight, riskLevel=$riskLevel, confidence=$confidence")
 
         AnalysisResult(
             riskLevel = riskLevel,
